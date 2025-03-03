@@ -20,15 +20,17 @@ ui <- fluidPage(
       uiOutput("calculator_sections")
     ),
     mainPanel(
+      width = 6,
       h3("QALY Output", style = "text-align: center; margin-bottom: 20px;"),
-      uiOutput("QALY_results")
+      actionButton("calculate_sums", "Calculate Sums", class = "btn-primary", style = "width: 100%; margin-top: 20px;"),
+      uiOutput("fund_total_qalys")
     )
   )
 )
 
 server <- function(input, output, session) {
   
-  setwd(paste0("C:/Users/", username, "/Global Impact Investing Network/Document Center - RESEARCH/Projects - Performance/Impact Performance Concepts/2023 Fund Level Methodology/Content development/Due diligence and selection/JT Hackathon/QALY/"))
+  setwd(paste0("C:/Users/", username, "/Global Impact Investing Network/Document Center - RESEARCH/Projects - Performance/Impact Performance Concepts/2023 Fund Level Methodology/Content development/QALY tool/JT Hackathon/QALY/"))
   load("qaly_database.RData")
   
   # Initialize reactive values
@@ -102,7 +104,7 @@ server <- function(input, output, session) {
   })
   
   # Save input data to reactive values
-  observe({
+  observeEvent(input$calculate_sums, {
     lapply(1:2, function(i) {
       lapply(1:10, function(j) {
         index <- (i - 1) * 10 + j
@@ -111,11 +113,11 @@ server <- function(input, output, session) {
             Investment_Name = input[[paste0("Investment_Name_", i, "_", j)]],
             Country = input[[paste0("Country_", i, "_", j)]],
             Impact_category = input[[paste0("Impact_category_", i, "_", j)]],
-            Beneficiaries = input[[paste0("Beneficiaries_", i, "_", j)]],
-            Needs = input[[paste0("Needs_", i, "_", j)]],
-            Saves_Lives = input[[paste0("Saves_Lives_", i, "_", j)]],
-            Lives_Saved = input[[paste0("Lives_Saved_", i, "_", j)]],
-            Life_Years = input[[paste0("Life_Years_", i, "_", j)]]
+            Beneficiaries = as.numeric(input[[paste0("Beneficiaries_", i, "_", j)]]) %||% 0,
+            Needs = as.numeric(input[[paste0("Needs_", i, "_", j)]]) %||% 0,
+            Saves_Lives = input[[paste0("Saves_Lives_", i, "_", j)]] %||% FALSE,
+            Lives_Saved = as.numeric(input[[paste0("Lives_Saved_", i, "_", j)]]) %||% 0,
+            Life_Years = as.numeric(input[[paste0("Life_Years_", i, "_", j)]]) %||% 1
           )
           calculations$data$Details[[index]] <- investment
         }
@@ -123,59 +125,76 @@ server <- function(input, output, session) {
     })
   })
   
-  # Calculate and render QALY results
-  output$QALY_results <- renderUI({
-    result_list <- lapply(1:2, function(i) {
-      lapply(1:calculations$clicks[i], function(j) {
+  observeEvent(input$calculate_sums, {
+    lapply(1:2, function(i) {
+      lapply(1:10, function(j) {
         index <- (i - 1) * 10 + j
         if (calculations$data$Rendered[index] == 1) {
           investment <- calculations$data$Details[[index]]
-          avg_qaly_shortfall <- qaly_database %>%
-            filter(country == investment$Country & Impact_category == investment$Impact_category) %>%
-            select(average_qaly_shortfall) %>%
-            pull()
           
-
+          # Ensure Country and Impact_category are set
+          avg_qaly_shortfall <- 0
+          if (!is.null(investment$Country) && !is.null(investment$Impact_category)) {
+            avg_qaly_shortfall <- qaly_database %>%
+              filter(country == investment$Country & Impact_category == investment$Impact_category) %>%
+              pull(average_qaly_shortfall) %>%
+              as.numeric() %||% 0
+          }            
+          
           qaly_value <- as.numeric(avg_qaly_shortfall) * as.numeric(investment$Beneficiaries) * as.numeric(investment$Needs)
           
           if (as.logical(investment$Saves_Lives)) {
             qaly_value <- qaly_value + (as.numeric(investment$Lives_Saved) * as.numeric(investment$Life_Years))
           }
           
-          div(
-            h4(paste("Fund", investment$Fund, "- Investment", investment$Investment_Name)),
-            p(paste("Country:", investment$Country)),
-            p(paste("Impact Category:", investment$Impact_category)),
-            p(paste("This investment saves lives:", ifelse(investment$Saves_Lives, "Yes", "No"))),
-            p(paste("QALY Value:", qaly_value))
-          )
+          # Debug statement to check QALY value calculation
+          print(paste("Fund:", i, "Investment:", j, "QALY Value:", qaly_value))
+          
+          # Store the QALY value in the investment details
+          calculations$data$Details[[index]] <- modifyList(investment, list(QALY_Value = qaly_value))
         }
       })
     })
-    
-    do.call(tagList, result_list)
   })
   
-  # Calculate and render Fund total QALYs
-  output$fund_total_qalys <- renderUI({
-    total_qalys <- lapply(1:2, function(i) {
+output$fund_total_qalys <- renderUI({
+  cat("Rendering fund_total_qalys\n")
+  
+  # Iterate over funds
+  tagList(
+    lapply(1:2, function(i) {
       fund_qaly_value <- sum(sapply(1:calculations$clicks[i], function(j) {
         index <- (i - 1) * 10 + j
-        if (calculations$data$Rendered[index] == 1) {
-          return(as.numeric(calculations$data$Details[[index]]$QALY_Value))
-        } else {
-          return(0)
+        
+        # Check if QALY data exists
+        if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
+          qaly_value <- calculations$data$Details[[index]]$QALY_Value
+          cat("Fund:", i, "Investment:", j, "QALY Value:", qaly_value, "\n")
+          
+          if (!is.null(qaly_value) && !is.na(qaly_value)) {
+            return(as.numeric(qaly_value))
+          }
         }
-      }), na.rm = TRUE)
+        return(0)
+      }))
+      
+      cat("Fund:", i, "Total QALYs:", fund_qaly_value, "\n")  # Debugging
       
       div(
-        h4(paste("Fund", i, "Total QALYs")),
-        p(paste("Total QALYs:", fund_qaly_value))
+        style = "border: 3px solid #333; background-color: #f2f2f2; padding: 10px; margin-top: 20px; border-radius: 5px;",
+        h4(paste("Total QALYs for Fund", i, ":"), style = "margin-bottom: 5px;"),
+        h3(fund_qaly_value, style = "font-weight: bold; color: #007bff;")
       )
     })
-    
-    do.call(tagList, total_qalys)
-  })
+  )
+})
+
+observe({
+  cat("Current State of calculations$data$Details:\n")
+  print(str(calculations$data$Details))
+})
+
+
 }
 
 shinyApp(ui = ui, server = server)
