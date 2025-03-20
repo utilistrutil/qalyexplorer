@@ -1,11 +1,11 @@
 library(shiny)
 library(dplyr)
+library(plotly)
 
 ## Known issues
 ####Fund names not refreshing
 ####Long lag times on adding investments (mostly due to issues with presets)
-####Code to render UI for fund sums is written but not appearing?
-####In general, probably needs much better error handling.
+####clicking "add investment" clears values because they're not being stored
 
 # SET ---------------------------------------------------------------------
 
@@ -23,7 +23,7 @@ ui <- fluidPage(
       width = 6,
       h3("QALY Output", style = "text-align: center; margin-bottom: 20px;"),
       actionButton("calculate_sums", "Calculate Sums", class = "btn-primary", style = "width: 100%; margin-top: 20px;"),
-      uiOutput("fund_total_qalys")
+      uiOutput("fund_total_qalys_container")
     )
   )
 )
@@ -41,7 +41,7 @@ server <- function(input, output, session) {
       Rendered = rep(0, 20),
       Details = I(vector("list", 20))
     ),
-    clicks = c(1, 0)  # Counter for each fund
+    clicks = c(0, 0)  # Counter for each fund
   )
   
   # Render the fund boxes
@@ -63,6 +63,10 @@ server <- function(input, output, session) {
   observe({
     lapply(1:2, function(i) {
       output[[paste0("investment_sections_", i)]] <- renderUI({
+        if (calculations$clicks[i] == 0) {
+          return(div(style = "color: red;", "Click 'add an investment'"))
+        }
+        
         tagList(
           lapply(1:calculations$clicks[i], function(j) {
             index <- (i - 1) * 10 + j
@@ -157,44 +161,99 @@ server <- function(input, output, session) {
     })
   })
   
-output$fund_total_qalys <- renderUI({
-  cat("Rendering fund_total_qalys\n")
+  # Conditionally render the fund_total_qalys UI
+  output$fund_total_qalys_container <- renderUI({
+    if (sum(calculations$clicks) > 0) {
+      uiOutput("fund_total_qalys")
+    } else {
+      NULL
+    }
+  })
   
-  # Iterate over funds
-  tagList(
-    lapply(1:2, function(i) {
-      fund_qaly_value <- sum(sapply(1:calculations$clicks[i], function(j) {
-        index <- (i - 1) * 10 + j
-        
-        # Check if QALY data exists
-        if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
-          qaly_value <- calculations$data$Details[[index]]$QALY_Value
-          cat("Fund:", i, "Investment:", j, "QALY Value:", qaly_value, "\n")
+  output$fund_total_qalys <- renderUI({
+    cat("Rendering fund_total_qalys\n")
+    
+    # Iterate over funds
+    tagList(
+      lapply(1:2, function(i) {
+        qaly_values <- sapply(1:calculations$clicks[i], function(j) {
+          index <- (i - 1) * 10 + j
           
-          if (!is.null(qaly_value) && !is.na(qaly_value)) {
-            return(as.numeric(qaly_value))
+          # Check if QALY data exists
+          if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
+            qaly_value <- calculations$data$Details[[index]]$QALY_Value
+            cat("Fund:", i, "Investment:", j, "QALY Value:", qaly_value, "\n")
+            
+            if (!is.null(qaly_value) && !is.na(qaly_value)) {
+              return(as.numeric(qaly_value))
+            }
           }
-        }
-        return(0)
-      }))
-      
-      cat("Fund:", i, "Total QALYs:", fund_qaly_value, "\n")  # Debugging
-      
-      div(
-        style = "border: 3px solid #333; background-color: #f2f2f2; padding: 10px; margin-top: 20px; border-radius: 5px;",
-        h4(paste("Total QALYs for Fund", i, ":"), style = "margin-bottom: 5px;"),
-        h3(fund_qaly_value, style = "font-weight: bold; color: #007bff;")
-      )
+          return(0)
+        })
+        
+        fund_qaly_value <- sum(qaly_values)
+        cat("Fund:", i, "Total QALYs:", fund_qaly_value, "\n")  # Debugging
+        
+        # Create pie chart for QALY values
+        pie_chart <- plot_ly(
+          labels = sapply(1:calculations$clicks[i], function(j) {
+            index <- (i - 1) * 10 + j
+            if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
+              investment <- calculations$data$Details[[index]]
+              return(investment$Investment_Name)
+            }
+            return(NULL)
+          }),
+          values = qaly_values,
+          type = 'pie',
+          textinfo = 'label+percent',
+          insidetextorientation = 'radial',
+          title = paste("QALY Distribution for Fund", i)
+        )
+        div(
+          style = "border: 3px solid #333; background-color: #f2f2f2; padding: 10px; margin-top: 20px; border-radius: 5px;",
+          h4(paste("Total QALYs for Fund", i, ":"), style = "margin-bottom: 5px;"),
+          h3(fund_qaly_value, style = "font-weight: bold; color: #007bff;"),
+          plotlyOutput(paste("pie_chart_fund", i, sep = "_"))
+        )
+      })
+    )
+  })
+  
+  # Render the pie charts
+  observe({
+    lapply(1:2, function(i) {
+      output[[paste("pie_chart_fund", i, sep = "_")]] <- renderPlotly({
+        qaly_values <- sapply(1:calculations$clicks[i], function(j) {
+          index <- (i - 1) * 10 + j
+          
+          if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
+            qaly_value <- calculations$data$Details[[index]]$QALY_Value
+            if (!is.null(qaly_value) && !is.na(qaly_value)) {
+              return(as.numeric(qaly_value))
+            }
+          }
+          return(0)
+        })
+        
+        plot_ly(
+          labels = sapply(1:calculations$clicks[i], function(j) {
+            index <- (i - 1) * 10 + j
+            if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
+              investment <- calculations$data$Details[[index]]
+              return(investment$Investment_Name)
+            }
+            return(NULL)
+          }),
+          values = qaly_values,
+          type = 'pie',
+          textinfo = 'label+percent',
+          insidetextorientation = 'radial',
+          title = paste("QALY Distribution for Fund", i)
+        )
+      })
     })
-  )
-})
-
-observe({
-  cat("Current State of calculations$data$Details:\n")
-  print(str(calculations$data$Details))
-})
-
-
+  })
 }
 
 shinyApp(ui = ui, server = server)
