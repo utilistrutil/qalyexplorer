@@ -16,6 +16,7 @@ library(shinyjs)
 ui <- fluidPage(
   shinyjs::useShinyjs(),
   tags$head(
+    tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"),
     tags$style(HTML("
     .default-btn{
         background-color: #041E42;
@@ -96,7 +97,7 @@ server <- function(input, output, session) {
       lapply(1:2, function(i) {
         div(class = "fund-box",  # fund box
             fluidRow(
-              column(12, textInput(paste0("Fund_Name_", i), "Fund Name:", value = calculations$fund_names[i])),
+              column(12, textInput(paste0("Fund_Name_", i), "Fund Name:", value = "")),
             ),
             uiOutput(paste0("investment_sections_", i)),  # Dynamic investments within each fund
             if(calculations$clicks[i] == 0) {
@@ -192,8 +193,8 @@ server <- function(input, output, session) {
   })
   # Store fund names
   observe({
-    calculations$fund_names[1] <- input$Fund_Name_1 %||% ""
-    calculations$fund_names[2] <- input$Fund_Name_2 %||% ""
+    calculations$fund_names[1] <- input$Fund_Name_1 %||% "Fund 1"
+    calculations$fund_names[2] <- input$Fund_Name_2 %||% "Fund 2"
   })
   
   
@@ -242,12 +243,6 @@ server <- function(input, output, session) {
   
   # Save input data to reactive values
   observeEvent(input$calculate_sums, {
-    fund_names <- c(
-      
-      input$Fund_Name_1 %||% calculations$fund_names[1] %||% paste("Fund", 1),
-      input$Fund_Name_2 %||% calculations$fund_names[2] %||% paste("Fund", 2)
-      
-    )
     lapply(1:2, function(i) {
       lapply(1:10, function(j) {
         index <- (i - 1) * 10 + j
