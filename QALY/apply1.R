@@ -3,14 +3,15 @@ library(dplyr)
 library(plotly)
 library(shinyBS)
 library(shinyjs)
-## Known issues
-####Fund names not refreshing
-####Lag times on adding investments (mostly due to issues with presets)
+## Accepted issues
 ####Category dropdowns are not responsive to IRIS theme selection
+####Lag times on adding investments (mostly due to issues with presets)
 ####Calculate lag times since we have to do a match to LCA categories -
 #####Should harmonize QALY outputs to same labels to reduce lag
-####Add delete/clear button
 
+## TO DO
+### Remove debugs
+### 
 
 # UI ----------------------------------------------------------------------
 ui <- fluidPage(
@@ -88,8 +89,13 @@ server <- function(input, output, session) {
       Details = I(vector("list", 20))
     ),
     clicks = c(0, 0),  # Counter for each fund
-    fund_names = c("", "")  # Store fund names
+    clicks_o = c(0,0)
   )
+  
+  fund_names <- reactiveValues(
+    fund_name_1 = "Fund 1",
+    fund_name_2 = "Fund 2"
+  )  
   
   # Render the fund boxes
   output$calculator_sections <- renderUI({
@@ -97,7 +103,7 @@ server <- function(input, output, session) {
       lapply(1:2, function(i) {
         div(class = "fund-box",  # fund box
             fluidRow(
-              column(12, textInput(paste0("Fund_Name_", i), "Fund Name:", value = "")),
+              column(12, textInput(paste0("Fund_Name_", i), "Fund Name:", value = fund_names[[paste0("fund_name_", i)]]))
             ),
             uiOutput(paste0("investment_sections_", i)),  # Dynamic investments within each fund
             if(calculations$clicks[i] == 0) {
@@ -110,6 +116,15 @@ server <- function(input, output, session) {
         )
       })
     )
+  })
+  
+  #Observe fund names
+  observe({
+    lapply(1:2, function(i) {
+      observeEvent(input[[paste0("Fund_Name_", i)]], {
+        fund_names[[paste0("fund_name_", i)]] <- input[[paste0("Fund_Name_", i)]]
+      }, ignoreNULL = FALSE)
+    })
   })
   
   # Dynamically render investments for each fund
@@ -128,8 +143,8 @@ server <- function(input, output, session) {
               div(class = "investment-box",  # investment box
                   p(paste0("Investment #",j)),
                   fluidRow(
-                    column(12, selectInput(paste0("Country_", i, "_", j), "Investment Country:", choices = unique(qaly_database$country), selected = investment$Country)),
-                    column(6, selectInput(paste0("Impact_theme_", i, "_", j), "Impact Theme:", choices = unique(mapping$IRIS_topic), selected = investment$IRIS_theme)),
+                    column(12, selectInput(paste0("Country_", i, "_", j), "Investment Country:", choices = sort(unique(qaly_database$country)), selected = investment$Country)),
+                    column(6, selectInput(paste0("Impact_theme_", i, "_", j), "Impact Theme:", choices = sort(unique(mapping$IRIS_topic)), selected = investment$Impact_theme)),
                     column(6, 
                            div(
                              selectInput(paste0("Impact_category_", i, "_", j), "Impact Category:", choices = unique(mapping$Label), selected = investment$Impact_category),
@@ -144,12 +159,12 @@ server <- function(input, output, session) {
                       condition = paste0("input.Saves_Lives_", i, "_", j),
                       column(6, numericInput(paste0("Lives_Saved_", i, "_", j), "Lives Saved:", value = investment$Lives_Saved, min = 0)),
                       column(6, selectInput(paste0("Life_Years_", i, "_", j), "Life Years:", choices = c(1, 5, 25), selected = investment$Life_Years))
-                    ),
+                    )
                   ),
                   if (j == calculations$clicks[i]) {
                     div(class = "button-group",
                         actionButton(paste0("add_investment_", i), "Add Investment", class = "default-btn"),
-                        actionButton(paste0("delete_investment_", i, "_", j), "Delete Investment", class = "default-btn")
+                        actionButton(paste0("delete_investment_", i, "_", j), "Delete Last Investment", class = "default-btn")
                     )
                     
                   } 
@@ -212,7 +227,18 @@ server <- function(input, output, session) {
   })
   
   #delete investments
-  #add code here
+  observe({
+    lapply(1:2, function(i) {
+      lapply(1:10, function(j) {
+        observeEvent(input[[paste0("delete_investment_", i,"_", j)]], {
+          index <- (i - 1) * 10 + j
+          calculations$data$Details[[index]] <- list()
+          calculations$data$Rendered[[index]] <- 0
+          calculations$clicks[i] <- calculations$clicks[i] - 1
+        })
+      })
+    })
+  })
   
   
   ###add investment save observer
@@ -226,6 +252,7 @@ server <- function(input, output, session) {
             if (calculations$data$Rendered[index] == 1) {
               investment <- list(
                 Country = input[[paste0("Country_", i, "_", j)]],
+                Impact_theme = input[[paste0("Impact_theme_", i, "_", j)]],
                 Impact_category = input[[paste0("Impact_category_", i, "_", j)]],
                 Beneficiaries = as.numeric(input[[paste0("Beneficiaries_", i, "_", j)]]) %||% 0,
                 Needs = as.numeric(input[[paste0("Needs_", i, "_", j)]]) %||% 0,
@@ -239,6 +266,8 @@ server <- function(input, output, session) {
         })
       })
     })
+    print("add button clicked")
+    print(calculations$data$Details)
   })  
   
   # Save input data to reactive values
@@ -250,6 +279,7 @@ server <- function(input, output, session) {
           investment <- list(
             Investment_Name = input[[paste0("Investment_Name_", i, "_", j)]],
             Country = input[[paste0("Country_", i, "_", j)]],
+            Impact_theme = input[[paste0("Impact_theme_", i, "_", j)]],
             Impact_category = input[[paste0("Impact_category_", i, "_", j)]],
             Beneficiaries = as.numeric(input[[paste0("Beneficiaries_", i, "_", j)]]) %||% 0,
             Needs = as.numeric(input[[paste0("Needs_", i, "_", j)]]) %||% 0,
@@ -258,6 +288,7 @@ server <- function(input, output, session) {
             Life_Years = as.numeric(input[[paste0("Life_Years_", i, "_", j)]]) %||% 1
           )
           calculations$data$Details[[index]] <- investment
+          calculations$clicks_o <- calculations$clicks
         }
       })
     })
@@ -267,7 +298,10 @@ server <- function(input, output, session) {
     lapply(1:2, function(i) {
       lapply(1:10, function(j) {
         index <- (i - 1) * 10 + j
-        if (calculations$data$Rendered[index] == 1) {
+        ### I think we might want to filter for blank country/categories
+        if (calculations$data$Rendered[index] == 1 &&
+            !is.null(calculations$data$Details[[index]]$Country)) {
+          
           investment <- calculations$data$Details[[index]]
           
           # Ensure Country and Impact_category are set
@@ -302,81 +336,15 @@ server <- function(input, output, session) {
   })
   
   
-  output$fund_total_qalys <- renderUI({
-    div(
-      style = "border: 1px solid #eee;box-shadow: 0 2px 4px rgba(0,0,0,0.1);;margin-top: 40px; margin-right:30px;",
-      if(sum(calculations$clicks)==0 || !input$calculate_sums){
-        div(
-          style = "display: flex; flex-direction: column; align-items: center; justify-content: center;margin-top:10px;margin-bottom:10px;",
-          tags$img(src = "https://t4.ftcdn.net/jpg/01/17/17/51/360_F_117175168_pW01TQkluE8tFoXlzdSJ3WI6pzqba3dG.jpg", 
-                   height = "100px", width = "100px"),
-          h4("Fill out the inputs to view QALY impact achieved by different funds", 
-             style = "text-align: center; margin-top: 20px; font-weight: bold;max-width: 400px;")
-        )
-      }else{
-        cat("Rendering fund_total_qalys\n")
-        
-        fund_names <- c(
-          input$Fund_Name_1 %||% "Fund 1",
-          input$Fund_Name_2 %||% "Fund 2"
-        )
-        
-        # Iterate over funds
-        tagList(
-          lapply(1:2, function(i) {
-            # Aggregate QALY values by impact category
-            impact_category_qalys <- lapply(1:calculations$clicks[i], function(j) {
-              index <- (i - 1) * 10 + j
-              
-              # Check if QALY data exists
-              if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
-                investment <- calculations$data$Details[[index]]
-                return(data.frame(
-                  category = investment$Impact_category, 
-                  qaly_value = investment$QALY_Value
-                ))
-              }
-              return(NULL)
-            }) 
-            
-            # Remove NULL values and combine
-            impact_category_qalys <- do.call(rbind, Filter(Negate(is.null), impact_category_qalys))
-            
-            # If we have data, aggregate
-            if(nrow(impact_category_qalys) > 0) {
-              impact_category_qalys <- impact_category_qalys %>%
-                group_by(category) %>%
-                summarise(total_qaly = sum(qaly_value, na.rm = TRUE))
-              
-              fund_qaly_value <- sum(impact_category_qalys$total_qaly)
-              cat("Fund:", i, "Total QALYs:", fund_qaly_value, "\n")  # Debugging
-              
-              div(
-                h4(paste("Total QALYs for Fund", i, ":"), style = "margin-bottom: 5px;"),
-                h3(sprintf("%.2f", fund_qaly_value), style = "font-weight: bold; color: #007bff;"),
-                h4("Fund QALY Composition"),
-                plotlyOutput(paste("pie_chart_fund", i, sep = "_"))
-                
-              )
-            } else {
-              div(
-                h4(paste("No QALY data for Fund", i))
-              )
-            }
-          })
-        )
-      })
-  })
-  
-  # Update the pie chart rendering observe section
-  observe({
-    req(input$calculate_sums)
-    lapply(1:2, function(i) {
-      output[[paste("pie_chart_fund", i, sep = "_")]] <- renderPlotly({
-        # Aggregate QALY values by impact category
-        impact_category_qalys <- lapply(1:calculations$clicks[i], function(j) {
+  fund_qaly_results <- eventReactive(input$calculate_sums, {
+    cat("Recalculating QALYs\n")
+    
+
+      lapply(1:2, function(i) {
+        impact_category_qalys <- lapply(1:10, function(j) {
           index <- (i - 1) * 10 + j
           
+          # Check if QALY data exists
           if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
             investment <- calculations$data$Details[[index]]
             return(data.frame(
@@ -384,51 +352,125 @@ server <- function(input, output, session) {
               qaly_value = investment$QALY_Value
             ))
           }
-          return(NULL)
-        })
+        }) 
         
         # Remove NULL values and combine
         impact_category_qalys <- do.call(rbind, Filter(Negate(is.null), impact_category_qalys))
         
-        # If we have data, create pie chart
-        if(nrow(impact_category_qalys) > 0) {
-          # Aggregate QALY values by impact category
+        # If we have data, aggregate
+        if(calculations$clicks_o[i] > 0) {
           impact_category_qalys <- impact_category_qalys %>%
             group_by(category) %>%
-            summarise(total_qaly = sum(qaly_value, na.rm = TRUE))%>%
-            mutate(percentage = total_qaly / sum(total_qaly) * 100)
+            summarise(total_qaly = sum(qaly_value, na.rm = TRUE))
           
-          plot_ly(
-            labels = impact_category_qalys$category,
-            values = impact_category_qalys$total_qaly,
-            type = 'pie',
-            textinfo = 'label+percent',
-            insidetextorientation = 'radial',
-            textposition = 'inside',
-            hole = 0.4,
-          )%>%
-            layout(
-              showlegend = TRUE,
-              legend = list(
-                orientation = "h",
-                xanchor = "center",
-                x = 0.5,
-                y = -0.1
-              )
-            )
+          fund_qaly_value <- sum(impact_category_qalys$total_qaly)
+          cat("Fund:", i, "Total QALYs:", fund_qaly_value, "\n")  # Debugging
+          
+          return(div(
+            h4(paste("Total QALYs for ", isolate(fund_names[[paste0("fund_name_", i)]]), " Fund:"), style = "margin-bottom: 5px;"),
+            h3(sprintf("%.2f", fund_qaly_value), style = "font-weight: bold; color: #007bff;"),
+            h4("Fund QALY Composition"),
+            plotlyOutput(paste("pie_chart_fund", i, sep = "_"))
+          ))
         } else {
-          # Fallback plot if no data
-          plot_ly(
-            labels = "No Data",
-            values = 1,
-            type = 'pie',
-            textinfo = 'label',
-            title = paste("No QALY Data for Fund", i)
-          )
+          return(div(
+            h4(paste("No QALY data for Fund", i))
+          ))
         }
+
+    })
+  })
+  
+  output$fund_total_qalys <- renderUI({
+    div(
+      style = "border: 1px solid #eee;box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 40px; margin-right:30px;",
+      
+      # If button hasn't been clicked, show default message
+      if (sum(calculations$clicks_o) == 0 || !input$calculate_sums) {
+        div(
+          style = "display: flex; flex-direction: column; align-items: center; justify-content: center;margin-top:10px;margin-bottom:10px;",
+          tags$img(src = "https://t4.ftcdn.net/jpg/01/17/17/51/360_F_117175168_pW01TQkluE8tFoXlzdSJ3WI6pzqba3dG.jpg", 
+                   height = "100px", width = "100px"),
+          h4("Fill out the inputs to view QALY impact achieved by different funds", 
+             style = "text-align: center; margin-top: 20px; font-weight: bold;max-width: 400px;")
+        )
+      } else {
+        tagList(fund_qaly_results())  # Use eventReactive result
+      }
+    )
+  })
+  
+  # Update the pie chart rendering observe section
+  
+  # Reactive expression to handle calculate_sums button click
+  calculate_event <- eventReactive(input$calculate_sums, {
+    lapply(1:2, function(i) {
+      # Aggregate QALY values by impact category
+      impact_category_qalys <- lapply(1:calculations$clicks_o[i], function(j) {
+        index <- (i - 1) * 10 + j
+        
+        if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
+          investment <- calculations$data$Details[[index]]
+          return(data.frame(
+            category = investment$Impact_category, 
+            qaly_value = investment$QALY_Value
+          ))
+        }
+        return(NULL)
+      })
+      
+      # Remove NULL values and combine
+      impact_category_qalys <- bind_rows(Filter(Negate(is.null), impact_category_qalys))
+      
+      # If we have data, create pie chart
+      if(nrow(impact_category_qalys) > 0) {
+        # Aggregate QALY values by impact category
+        impact_category_qalys <- impact_category_qalys %>%
+          group_by(category) %>%
+          summarise(total_qaly = sum(qaly_value, na.rm = TRUE)) %>%
+          mutate(percentage = total_qaly / sum(total_qaly) * 100)
+        
+        plot_ly(
+          labels = impact_category_qalys$category,
+          values = impact_category_qalys$total_qaly,
+          type = 'pie',
+          textinfo = 'label+percent',
+          insidetextorientation = 'radial',
+          textposition = 'inside',
+          hole = 0.4
+        ) %>%
+          layout(
+            title = paste("QALYs distribution for", fund_names[[paste0("fund_name_", i)]]),            
+            showlegend = TRUE,
+            legend = list(
+              orientation = "h",
+              xanchor = "center",
+              x = 0.5,
+              y = -0.1
+            )
+          )
+      } else {
+        # Fallback plot if no data
+        plot_ly(
+          labels = "No Data",
+          values = 1,
+          type = 'pie',
+          textinfo = 'label',
+          title = paste("No QALY Data for Fund", i)
+        )
+      }
+    })
+  })
+  
+  # Observe the calculate_event reactive and update the output
+  observeEvent(calculate_event(), {
+    lapply(1:2, function(i) {
+      output[[paste("pie_chart_fund", i, sep = "_")]] <- renderPlotly({
+        calculate_event()[[i]]
       })
     })
   })
+  
 }
 
 shinyApp(ui = ui, server = server)
