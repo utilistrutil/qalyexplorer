@@ -11,7 +11,8 @@ library(shinyjs)
 
 ## TO DO
 ### Remove debugs
-### 
+### Add methodology link
+### Hovers are filler right now
 
 # UI ----------------------------------------------------------------------
 ui <- fluidPage(
@@ -77,8 +78,7 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
   qaly_database <- get(load("./data/qaly_database.RData"))
-  mapping <- get(load("./data/demoqalymap.RData")) %>%
-    filter(Applicable != "No")
+  mapping <- get(load("./data/qalymap.RData"))
   
   # Initialize reactive values
   calculations <- reactiveValues(
@@ -144,7 +144,7 @@ server <- function(input, output, session) {
                   p(paste0("Investment #",j)),
                   fluidRow(
                     column(12, selectInput(paste0("Country_", i, "_", j), "Investment Country:", choices = sort(unique(qaly_database$country)), selected = investment$Country)),
-                    column(6, selectInput(paste0("Impact_theme_", i, "_", j), "Impact Theme:", choices = sort(unique(mapping$IRIS_topic)), selected = investment$Impact_theme)),
+                    column(6, selectInput(paste0("SDG_", i, "_", j), "Sustainable Development Goal:", choices = sort(unique(mapping$SDG)), selected = investment$SDG)),
                     column(6, 
                            div(
                              selectInput(paste0("Impact_category_", i, "_", j), "Impact Category:", choices = unique(mapping$Label), selected = investment$Impact_category),
@@ -240,6 +240,32 @@ server <- function(input, output, session) {
     })
   })
   
+  ###fund name save observer
+  observe({
+    lapply(1:2, function(i) {
+      observeEvent(input[[paste0("Fund_Name_", i)]], {
+        lapply(1:2, function(i) {
+          lapply(1:10, function(j) {
+            index <- (i - 1) * 10 + j
+            if (calculations$data$Rendered[index] == 1) {
+              investment <- list(
+                Country = input[[paste0("Country_", i, "_", j)]],
+                SDG = input[[paste0("SDG_", i, "_", j)]],
+                Impact_category = input[[paste0("Impact_category_", i, "_", j)]],
+                Beneficiaries = as.numeric(input[[paste0("Beneficiaries_", i, "_", j)]]) %||% 0,
+                Needs = as.numeric(input[[paste0("Needs_", i, "_", j)]]) %||% 0,
+                Saves_Lives = input[[paste0("Saves_Lives_", i, "_", j)]] %||% FALSE,
+                Lives_Saved = as.numeric(input[[paste0("Lives_Saved_", i, "_", j)]]) %||% 0,
+                Life_Years = as.numeric(input[[paste0("Life_Years_", i, "_", j)]]) %||% 1
+              )
+              calculations$data$Details[[index]] <- investment
+            }
+          })
+        })
+      })
+    })
+  })  
+  
   
   ###add investment save observer
   observe({
@@ -252,7 +278,7 @@ server <- function(input, output, session) {
             if (calculations$data$Rendered[index] == 1) {
               investment <- list(
                 Country = input[[paste0("Country_", i, "_", j)]],
-                Impact_theme = input[[paste0("Impact_theme_", i, "_", j)]],
+                SDG = input[[paste0("SDG_", i, "_", j)]],
                 Impact_category = input[[paste0("Impact_category_", i, "_", j)]],
                 Beneficiaries = as.numeric(input[[paste0("Beneficiaries_", i, "_", j)]]) %||% 0,
                 Needs = as.numeric(input[[paste0("Needs_", i, "_", j)]]) %||% 0,
@@ -279,7 +305,7 @@ server <- function(input, output, session) {
           investment <- list(
             Investment_Name = input[[paste0("Investment_Name_", i, "_", j)]],
             Country = input[[paste0("Country_", i, "_", j)]],
-            Impact_theme = input[[paste0("Impact_theme_", i, "_", j)]],
+            SDG = input[[paste0("SDG", i, "_", j)]],
             Impact_category = input[[paste0("Impact_category_", i, "_", j)]],
             Beneficiaries = as.numeric(input[[paste0("Beneficiaries_", i, "_", j)]]) %||% 0,
             Needs = as.numeric(input[[paste0("Needs_", i, "_", j)]]) %||% 0,
@@ -414,6 +440,7 @@ server <- function(input, output, session) {
           return(data.frame(
             category = investment$Impact_category, 
             qaly_value = investment$QALY_Value
+            
           ))
         }
         return(NULL)
@@ -428,10 +455,15 @@ server <- function(input, output, session) {
         impact_category_qalys <- impact_category_qalys %>%
           group_by(category) %>%
           summarise(total_qaly = sum(qaly_value, na.rm = TRUE)) %>%
-          mutate(percentage = total_qaly / sum(total_qaly) * 100)
+          mutate(percentage = total_qaly / sum(total_qaly) * 100) %>%
+          left_join(mapping, by = c("category" = "Label")) %>%
+          select(-SDG, -Hover)
+        print("impactcatqalys")
+        print(impact_category_qalys)
+        
         
         plot_ly(
-          labels = impact_category_qalys$category,
+          labels = impact_category_qalys$Short_name,
           values = impact_category_qalys$total_qaly,
           type = 'pie',
           textinfo = 'label+percent',
