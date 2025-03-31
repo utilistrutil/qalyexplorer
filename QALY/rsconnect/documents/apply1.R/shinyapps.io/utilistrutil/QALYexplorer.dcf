@@ -1,0 +1,12 @@
+name: QALYexplorer
+title: QALYexplorer
+username: utilistrutil
+account: utilistrutil
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14369964
+bundleId: 10020937
+url: https://utilistrutil.shinyapps.io/QALYexplorer/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
