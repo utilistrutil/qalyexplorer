@@ -5,7 +5,7 @@ account: utilistrutil
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 14369964
-bundleId: 10038021
+bundleId: 10038170
 url: https://utilistrutil.shinyapps.io/QALYexplorer/
 version: 1
 asMultiple: FALSE

@@ -180,12 +180,12 @@ server <- function(input, output, session) {
                                        selected = investment$Impact_category)
                     ),
                     column(6, numericInput(paste0("Beneficiaries_", i, "_", j), "Beneficiaries served:", value = investment$Beneficiaries)),
-                    column(6, selectInput(paste0("Needs_", i, "_", j), "Percentage of needs met:", choices = c(0.25, 0.5, 0.75), selected = investment$Needs)),
+                    column(6, selectInput(paste0("Needs_", i, "_", j), "Percentage of needs met:",   choices = c("25%" = 0.25, "50%" = 0.5, "75%" = 0.75), selected = investment$Needs)),
                     column(12, checkboxInput(paste0("Saves_Lives_", i, "_", j), "This investment saves lives", value = investment$Saves_Lives)),
                     conditionalPanel(
                       condition = paste0("input.Saves_Lives_", i, "_", j),
                       column(6, numericInput(paste0("Lives_Saved_", i, "_", j), "Lives saved:", value = investment$Lives_Saved, min = 0)),
-                      column(6, selectInput(paste0("Life_Years_", i, "_", j), "Life years:", choices = c(1, 5, 25), selected = investment$Life_Years))
+                      column(6, selectInput(paste0("Life_Years_", i, "_", j), "Life years saved on average:", choices = c("1 year" = 1,"5 years" = 5,"25 years" = 25), selected = investment$Life_Years))
                     )
                   ),
                   if (j == calculations$clicks[i]) {
