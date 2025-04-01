@@ -48,9 +48,22 @@ ui <- fluidPage(
         margin-top: 10px;
         justify-content: flex-start;
     }
+    .results-container {
+      border: 1px solid #eee;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+      margin-top: 40px; 
+      margin-right: 30px;
+      padding: 20px;
+      text-align: center;
+    }
+    .fund-name{
+    font-size: 18px;
+    font-weight: bold; 
+    }
                   "
                     
-    ))
+    )),
+    
   ),
   div(
     style = " display: flex;align-items: center; justify-content: center;margin-top: 20px; margin-left:20px;",
@@ -100,10 +113,11 @@ server <- function(input, output, session) {
   # Render the fund boxes
   output$calculator_sections <- renderUI({
     tagList(
+      p("*If you refresh the page, all inputs and selections will be reset",style = "color: gray; font-size: 12px; margin-top: 10px; font-style: italic;margin-bottom: -10px;margin-left:10px;"),
       lapply(1:2, function(i) {
         div(class = "fund-box",  # fund box
             fluidRow(
-              column(12, textInput(paste0("Fund_Name_", i), "Fund Name:", value = fund_names[[paste0("fund_name_", i)]]))
+              column(12, div(class = "fund-name",textInput(paste0("Fund_name_", i), "Fund name:", value = fund_names[[paste0("fund_name_", i)]]) ))
             ),
             uiOutput(paste0("investment_sections_", i)),  # Dynamic investments within each fund
             if(calculations$clicks[i] == 0) {
@@ -121,7 +135,7 @@ server <- function(input, output, session) {
   #Observe fund names
   observe({
     lapply(1:2, function(i) {
-      observeEvent(input[[paste0("Fund_Name_", i)]], {
+      observeEvent(input[[paste0("Fund_name_", i)]], {
         fund_names[[paste0("fund_name_", i)]] <- input[[paste0("Fund_Name_", i)]]
       }, ignoreNULL = FALSE)
     })
@@ -141,24 +155,37 @@ server <- function(input, output, session) {
               investment <- calculations$data$Details[[index]]
               
               div(class = "investment-box",  # investment box
-                  p(paste0("Investment #",j)),
+                  h4(paste0("Investment #",j), style = "font-weight:bold; font-style:italic"),
                   fluidRow(
-                    column(12, selectInput(paste0("Country_", i, "_", j), "Investment Country:", choices = sort(unique(qaly_database$country)), selected = investment$Country)),
-                    column(6, selectInput(paste0("SDG_", i, "_", j), "Sustainable Development Goal:", choices = sort(unique(mapping$SDG)), selected = investment$SDG)),
+                    column(6, selectInput(paste0("Country_", i, "_", j), "Investment country:", choices = sort(unique(qaly_database$country)), selected = investment$Country)),
                     column(6, 
-                           div(
-                             selectInput(paste0("Impact_category_", i, "_", j), "Impact Category:", choices = unique(mapping$Label), selected = investment$Impact_category),
-                             tags$span(id = paste0("Impact_category_info_", i, "_", j), 
-                                       tags$i(class = "fa fa-question-circle", style = "margin-left: 5px; cursor: pointer;"))
+                           selectInput(
+                             paste0("SDG_", i, "_", j), 
+                             HTML(paste0(
+                               "Sustainable development goal: ",
+                               "<span id='", paste0("SDG_info_", i, "_", j),
+                               "' data-toggle='tooltip' title='the SDGs below are mapped to the impact categories, not all SDGs may be represented' ",
+                               "style='display: inline-block; margin-left: 5px; cursor: pointer;'>",
+                               "<i class='fa fa-question-circle'></i></span>"
+                             )), 
+                             choices = sort(unique(mapping$SDG)), 
+                             selected = investment$SDG
                            )
+                           ),
+                    column(12, 
+                           selectInput(paste0("Impact_category_", i, "_", j), 
+                                       HTML(paste0("Impact category: <span id='", paste0("Impact_category_info_", i, "_", j), 
+                                                   "' style='display: inline-block; margin-left: 5px;'><i class='fa fa-question-circle' style='cursor: pointer;'></i></span>")), 
+                                       choices = unique(mapping$Label), 
+                                       selected = investment$Impact_category)
                     ),
-                    column(6, numericInput(paste0("Beneficiaries_", i, "_", j), "Beneficiaries Served:", value = investment$Beneficiaries)),
-                    column(6, selectInput(paste0("Needs_", i, "_", j), "Percentage of Needs Met:", choices = c(0.25, 0.5, 0.75), selected = investment$Needs)),
+                    column(6, numericInput(paste0("Beneficiaries_", i, "_", j), "Beneficiaries served:", value = investment$Beneficiaries)),
+                    column(6, selectInput(paste0("Needs_", i, "_", j), "Percentage of needs met:", choices = c(0.25, 0.5, 0.75), selected = investment$Needs)),
                     column(12, checkboxInput(paste0("Saves_Lives_", i, "_", j), "This investment saves lives", value = investment$Saves_Lives)),
                     conditionalPanel(
                       condition = paste0("input.Saves_Lives_", i, "_", j),
-                      column(6, numericInput(paste0("Lives_Saved_", i, "_", j), "Lives Saved:", value = investment$Lives_Saved, min = 0)),
-                      column(6, selectInput(paste0("Life_Years_", i, "_", j), "Life Years:", choices = c(1, 5, 25), selected = investment$Life_Years))
+                      column(6, numericInput(paste0("Lives_Saved_", i, "_", j), "Lives saved:", value = investment$Lives_Saved, min = 0)),
+                      column(6, selectInput(paste0("Life_Years_", i, "_", j), "Life years:", choices = c(1, 5, 25), selected = investment$Life_Years))
                     )
                   ),
                   if (j == calculations$clicks[i]) {
@@ -203,9 +230,13 @@ server <- function(input, output, session) {
             }
           ", tooltip_id, hover_text))
         }, ignoreNULL = FALSE, ignoreInit = TRUE)
+        
+        
       })
     })
   })
+  
+
   # Store fund names
   observe({
     calculations$fund_names[1] <- input$Fund_Name_1 %||% "Fund 1"
@@ -243,7 +274,7 @@ server <- function(input, output, session) {
   ###fund name save observer
   observe({
     lapply(1:2, function(i) {
-      observeEvent(input[[paste0("Fund_Name_", i)]], {
+      observeEvent(input[[paste0("Fund_name_", i)]], {
         lapply(1:2, function(i) {
           lapply(1:10, function(j) {
             index <- (i - 1) * 10 + j
@@ -365,65 +396,65 @@ server <- function(input, output, session) {
   fund_qaly_results <- eventReactive(input$calculate_sums, {
     cat("Recalculating QALYs\n")
     
-
-      lapply(1:2, function(i) {
-        impact_category_qalys <- lapply(1:10, function(j) {
-          index <- (i - 1) * 10 + j
-          
-          # Check if QALY data exists
-          if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
-            investment <- calculations$data$Details[[index]]
-            return(data.frame(
-              category = investment$Impact_category, 
-              qaly_value = investment$QALY_Value
-            ))
-          }
-        }) 
+    
+    lapply(1:2, function(i) {
+      impact_category_qalys <- lapply(1:10, function(j) {
+        index <- (i - 1) * 10 + j
         
-        # Remove NULL values and combine
-        impact_category_qalys <- do.call(rbind, Filter(Negate(is.null), impact_category_qalys))
-        
-        # If we have data, aggregate
-        if(calculations$clicks_o[i] > 0) {
-          impact_category_qalys <- impact_category_qalys %>%
-            group_by(category) %>%
-            summarise(total_qaly = sum(qaly_value, na.rm = TRUE))
-          
-          fund_qaly_value <- sum(impact_category_qalys$total_qaly)
-          cat("Fund:", i, "Total QALYs:", fund_qaly_value, "\n")  # Debugging
-          
-          return(div(
-            h4(paste("Total QALYs for ", isolate(fund_names[[paste0("fund_name_", i)]]), " Fund:"), style = "margin-bottom: 5px;"),
-            h3(sprintf("%.2f", fund_qaly_value), style = "font-weight: bold; color: #007bff;"),
-            h4("Fund QALY Composition"),
-            plotlyOutput(paste("pie_chart_fund", i, sep = "_"))
-          ))
-        } else {
-          return(div(
-            h4(paste("No QALY data for Fund", i))
+        # Check if QALY data exists
+        if (!is.null(calculations$data$Details[[index]]) && calculations$data$Rendered[index] == 1) {
+          investment <- calculations$data$Details[[index]]
+          return(data.frame(
+            category = investment$Impact_category, 
+            qaly_value = investment$QALY_Value
           ))
         }
-
+      }) 
+      
+      # Remove NULL values and combine
+      impact_category_qalys <- do.call(rbind, Filter(Negate(is.null), impact_category_qalys))
+      
+      # If we have data, aggregate
+      if(calculations$clicks_o[i] > 0) {
+        impact_category_qalys <- impact_category_qalys %>%
+          group_by(category) %>%
+          summarise(total_qaly = sum(qaly_value, na.rm = TRUE))
+        
+        fund_qaly_value <- sum(impact_category_qalys$total_qaly)
+        cat("Fund:", i, "Total QALYs:", fund_qaly_value, "\n")  # Debugging
+        
+        return(div(
+          class = "results-container",
+          h4(paste("Total QALYs for fund ", isolate(fund_names[[paste0("fund_name_", i)]]), ":"), style = " font-weight:bold;  margin:10px 0"),
+          h3(formatC(fund_qaly_value, digits = 2, format = "f", big.mark = ","), 
+             style = "font-weight: bold; margin-bottom:15px"),
+          plotlyOutput(paste("pie_chart_fund", i, sep = "_"))
+        ))
+      } else {
+        return(div(
+          class = "results-container",
+          h4("For fund-level QALY comparison, please input information about this fund")
+        ))
+      }
+      
     })
   })
   
   output$fund_total_qalys <- renderUI({
-    div(
-      style = "border: 1px solid #eee;box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-top: 40px; margin-right:30px;",
-      
-      # If button hasn't been clicked, show default message
-      if (sum(calculations$clicks_o) == 0 || !input$calculate_sums) {
-        div(
-          style = "display: flex; flex-direction: column; align-items: center; justify-content: center;margin-top:10px;margin-bottom:10px;",
-          tags$img(src = "https://t4.ftcdn.net/jpg/01/17/17/51/360_F_117175168_pW01TQkluE8tFoXlzdSJ3WI6pzqba3dG.jpg", 
-                   height = "100px", width = "100px"),
-          h4("Fill out the inputs to view QALY impact achieved by different funds", 
-             style = "text-align: center; margin-top: 20px; font-weight: bold;max-width: 400px;")
-        )
-      } else {
-        tagList(fund_qaly_results())  # Use eventReactive result
-      }
-    )
+    
+    # If button hasn't been clicked, show default message
+    if (sum(calculations$clicks_o) == 0 || !input$calculate_sums) {
+      div(
+        class = "results-container",
+        style = "display: flex; flex-direction: column; align-items: center; justify-content: center;",
+        tags$img(src = "https://t4.ftcdn.net/jpg/01/17/17/51/360_F_117175168_pW01TQkluE8tFoXlzdSJ3WI6pzqba3dG.jpg", 
+                 height = "100px", width = "100px"),
+        h4("Fill out the inputs to view QALY impact achieved by different funds", 
+           style = "text-align: center; margin-top: 20px; font-weight: bold;max-width: 400px;")
+      )
+    } else {
+      tagList(fund_qaly_results())  # Use eventReactive result
+    }
   })
   
   # Update the pie chart rendering observe section
@@ -466,13 +497,20 @@ server <- function(input, output, session) {
           labels = impact_category_qalys$Short_name,
           values = impact_category_qalys$total_qaly,
           type = 'pie',
-          textinfo = 'label+percent',
+          textinfo = 'text',
           insidetextorientation = 'radial',
           textposition = 'inside',
-          hole = 0.4
+          hole = 0.5,
+          hoverinfo = 'none', 
+          marker = list(
+            colors = c("#2E86C1", "#F39C12", "#E74C3C", "#8E44AD", "#16A085", "#D35400"),
+            line = list(color = '#FFFFFF', width = 1)
+          ),
+          text = paste0(round(impact_category_qalys$percentage, 1), "% (", round(impact_category_qalys$total_qaly, 2), ")")
         ) %>%
           layout(
-            title = paste("QALYs distribution for", fund_names[[paste0("fund_name_", i)]]),            
+            title = paste("QALYs composition of", fund_names[[paste0("fund_name_", i)]]),            
+            font = list(family = "Arial"), 
             showlegend = TRUE,
             legend = list(
               orientation = "h",
