@@ -105,7 +105,7 @@ server <- function(input, output, session) {
     clicks_o = c(0,0)
   )
   
-  fund_names <- reactiveValues(
+  Fund_names <- reactiveValues(
     fund_name_1 = "Fund 1",
     fund_name_2 = "Fund 2"
   )  
@@ -117,7 +117,7 @@ server <- function(input, output, session) {
       lapply(1:2, function(i) {
         div(class = "fund-box",  # fund box
             fluidRow(
-              column(12, div(class = "fund-name",textInput(paste0("Fund_name_", i), "Fund name:", value = fund_names[[paste0("fund_name_", i)]]) ))
+              column(12, div(class = "fund-name",textInput(paste0("Fund_name_", i), "Fund name:", value = Fund_names[[paste0("fund_name_", i)]]) ))
             ),
             uiOutput(paste0("investment_sections_", i)),  # Dynamic investments within each fund
             if(calculations$clicks[i] == 0) {
@@ -136,7 +136,7 @@ server <- function(input, output, session) {
   observe({
     lapply(1:2, function(i) {
       observeEvent(input[[paste0("Fund_name_", i)]], {
-        fund_names[[paste0("fund_name_", i)]] <- input[[paste0("Fund_Name_", i)]]
+        Fund_names[[paste0("fund_name_", i)]] <- input[[paste0("Fund_name_", i)]]
       }, ignoreNULL = FALSE)
     })
   })
@@ -239,8 +239,8 @@ server <- function(input, output, session) {
 
   # Store fund names
   observe({
-    calculations$fund_names[1] <- input$Fund_Name_1 %||% "Fund 1"
-    calculations$fund_names[2] <- input$Fund_Name_2 %||% "Fund 2"
+    calculations$Fund_names[1] <- input$Fund_name_1 %||% "Fund 1"
+    calculations$Fund_names[2] <- input$Fund_name_2 %||% "Fund 2"
   })
   
   
@@ -425,7 +425,7 @@ server <- function(input, output, session) {
         
         return(div(
           class = "results-container",
-          h4(paste("Total QALYs for fund ", isolate(fund_names[[paste0("fund_name_", i)]]), ":"), style = " font-weight:bold;  margin:10px 0"),
+          h4(paste("Total QALYs for fund ", isolate(Fund_names[[paste0("fund_name_", i)]]), ":"), style = " font-weight:bold;  margin:10px 0"),
           h3(formatC(fund_qaly_value, digits = 2, format = "f", big.mark = ","), 
              style = "font-weight: bold; margin-bottom:15px"),
           plotlyOutput(paste("pie_chart_fund", i, sep = "_"))
@@ -509,7 +509,7 @@ server <- function(input, output, session) {
           text = paste0(round(impact_category_qalys$percentage, 1), "% (", round(impact_category_qalys$total_qaly, 2), ")")
         ) %>%
           layout(
-            title = paste("QALYs composition of", fund_names[[paste0("fund_name_", i)]]),            
+            title = paste("QALYs composition of", Fund_names[[paste0("fund_name_", i)]]),            
             font = list(family = "Arial"), 
             showlegend = TRUE,
             legend = list(
