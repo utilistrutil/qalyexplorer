@@ -162,13 +162,13 @@ server <- function(input, output, session) {
                            selectInput(
                              paste0("SDG_", i, "_", j), 
                              HTML(paste0(
-                               "Sustainable development goal: ",
+                               "Sustainable Development Goal: ",
                                "<span id='", paste0("SDG_info_", i, "_", j),
-                               "' data-toggle='tooltip' title='the SDGs below are mapped to the impact categories, not all SDGs may be represented' ",
+                               "' data-toggle='tooltip' title='The SDGs below are mapped to the impact categories, not all SDGs may be represented' ",
                                "style='display: inline-block; margin-left: 5px; cursor: pointer;'>",
                                "<i class='fa fa-question-circle'></i></span>"
                              )), 
-                             choices = sort(unique(mapping$SDG)), 
+                             choices = unique(mapping$SDG)[order(as.numeric(gsub("SDG (\\d+):.*", "\\1", unique(mapping$SDG))))],
                              selected = investment$SDG
                            )
                            ),
@@ -181,12 +181,12 @@ server <- function(input, output, session) {
                     ),
                     column(6, numericInput(paste0("Beneficiaries_", i, "_", j), "Beneficiaries served:", value = investment$Beneficiaries)),
                     column(6, selectInput(paste0("Needs_", i, "_", j), "Percentage of needs met:",   choices = c("25%" = 0.25, "50%" = 0.5, "75%" = 0.75), selected = investment$Needs)),
-                    column(12, checkboxInput(paste0("Saves_Lives_", i, "_", j), "This investment saves lives", value = investment$Saves_Lives)),
+                    column(12, checkboxInput(paste0("Saves_Lives_", i, "_", j), "This investment saves lives (optional)", value = investment$Saves_Lives)),
                     conditionalPanel(
                       condition = paste0("input.Saves_Lives_", i, "_", j),
                       column(6, numericInput(paste0("Lives_Saved_", i, "_", j), "Lives saved:", value = investment$Lives_Saved, min = 0)),
-                      column(6, selectInput(paste0("Life_Years_", i, "_", j), "Life years saved on average:", choices = c("1 year" = 1,"5 years" = 5,"25 years" = 25), selected = investment$Life_Years))
-                    )
+                      column(6, selectInput(paste0("Life_Years_", i, "_", j), "Life years saved on average:", choices = c("1 year" = 0.9814506 * .3,"5 years" = 4.565068 * .3,"25 years" = 16.84345 * .3), selected = investment$Life_Years))
+                    ) 
                   ),
                   if (j == calculations$clicks[i]) {
                     div(class = "button-group",
